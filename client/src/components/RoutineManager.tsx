@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Edit3, Save, X, Dumbbell } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { apiClient } from '../lib/api';
 import { useAuth } from '../hooks/useAuth';
 
 interface Exercise {
@@ -37,22 +37,11 @@ export function RoutineManager() {
     if (!user) return;
 
     try {
-      const { data: routinesData, error: routinesError } = await supabase
-        .from('routines')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-
-      if (routinesError) throw routinesError;
+      const routinesData = await apiClient.getRoutines();
 
       const routinesWithExercises = await Promise.all(
         (routinesData || []).map(async (routine) => {
-          const { data: exercises } = await supabase
-            .from('routine_exercises')
-            .select('*')
-            .eq('routine_id', routine.id)
-            .order('order_index');
-
+          const exercises = await apiClient.getRoutineExercises(routine.id);
           return {
             ...routine,
             exercises: exercises || []
@@ -72,16 +61,7 @@ export function RoutineManager() {
     if (!user || !newRoutine.name.trim()) return;
 
     try {
-      const { data: routine, error: routineError } = await supabase
-        .from('routines')
-        .insert({
-          user_id: user.id,
-          name: newRoutine.name.trim()
-        })
-        .select()
-        .single();
-
-      if (routineError) throw routineError;
+      const routine = await apiClient.createRoutine(newRoutine.name.trim());
 
       const exercisesToInsert = newRoutine.exercises
         .filter(ex => ex.name.trim())
@@ -93,11 +73,9 @@ export function RoutineManager() {
         }));
 
       if (exercisesToInsert.length > 0) {
-        const { error: exercisesError } = await supabase
-          .from('routine_exercises')
-          .insert(exercisesToInsert);
-
-        if (exercisesError) throw exercisesError;
+        await Promise.all(exercisesToInsert.map(exercise => 
+          apiClient.createRoutineExercise(exercise)
+        ));
       }
 
       setNewRoutine({
@@ -113,12 +91,7 @@ export function RoutineManager() {
 
   const deleteRoutine = async (routineId: string) => {
     try {
-      const { error } = await supabase
-        .from('routines')
-        .delete()
-        .eq('id', routineId);
-
-      if (error) throw error;
+      await apiClient.deleteRoutine(routineId);
       fetchRoutines();
     } catch (error) {
       console.error('Error deleting routine:', error);

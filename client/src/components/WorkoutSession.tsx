@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Play, Square, Clock, Edit3, Trash2, Save, X, ArrowRight } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { apiClient } from '../lib/api';
 import { useAuth } from '../hooks/useAuth';
 
 interface Exercise {
@@ -69,21 +69,11 @@ export function WorkoutSession() {
     if (!user) return;
 
     try {
-      const { data: routinesData, error: routinesError } = await supabase
-        .from('routines')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-
-      if (routinesError) throw routinesError;
+      const routinesData = await apiClient.getRoutines();
 
       const routinesWithExercises = await Promise.all(
         (routinesData || []).map(async (routine) => {
-          const { data: exercises } = await supabase
-            .from('routine_exercises')
-            .select('*')
-            .eq('routine_id', routine.id)
-            .order('order_index');
+          const exercises = await apiClient.getRoutineExercises(routine.id);
 
           return {
             ...routine,
@@ -107,18 +97,11 @@ export function WorkoutSession() {
     if (!selectedRoutine) return;
 
     try {
-      const { data: workout, error } = await supabase
-        .from('workouts')
-        .insert({
-          user_id: user.id,
-          routine_id: selectedRoutineId,
-          routine_name: selectedRoutine.name,
-          start_time: new Date().toISOString()
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
+      const workout = await apiClient.createWorkout({
+        routine_id: selectedRoutineId,
+        routine_name: selectedRoutine.name,
+        start_time: new Date().toISOString()
+      });
 
       setActiveWorkout({
         id: workout.id,
@@ -150,21 +133,9 @@ export function WorkoutSession() {
     if (setsToSave.length === 0) return;
 
     try {
-      const { data, error } = await supabase
-        .from('workout_sets')
-        .insert(setsToSave)
-        .select();
-
-      if (error) throw error;
-
-      const newSets = data.map(set => ({
-        id: set.id,
-        exercise_name: set.exercise_name,
-        weight: set.weight,
-        reps: set.reps,
-        rpe: set.rpe,
-        set_number: set.set_number
-      }));
+      const newSets = await Promise.all(setsToSave.map(set => 
+        apiClient.createWorkoutSet(set)
+      ));
 
       setWorkoutSets(prev => [...prev, ...newSets]);
     } catch (error) {
@@ -188,13 +159,7 @@ export function WorkoutSession() {
 
   const deleteSet = async (setId: string) => {
     try {
-      const { error } = await supabase
-        .from('workout_sets')
-        .delete()
-        .eq('id', setId);
-
-      if (error) throw error;
-
+      await apiClient.deleteWorkoutSet(setId);
       setWorkoutSets(prev => prev.filter(set => set.id !== setId));
     } catch (error) {
       console.error('Error deleting set:', error);
@@ -203,13 +168,7 @@ export function WorkoutSession() {
 
   const updateSet = async (setId: string, updates: Partial<WorkoutSet>) => {
     try {
-      const { error } = await supabase
-        .from('workout_sets')
-        .update(updates)
-        .eq('id', setId);
-
-      if (error) throw error;
-
+      // Note: API doesn't have update set endpoint, so we'll handle it locally for now
       setWorkoutSets(prev => prev.map(set => 
         set.id === setId ? { ...set, ...updates } : set
       ));
@@ -225,14 +184,9 @@ export function WorkoutSession() {
     await saveAllSets();
 
     try {
-      const { error } = await supabase
-        .from('workouts')
-        .update({
-          end_time: new Date().toISOString()
-        })
-        .eq('id', activeWorkout.id);
-
-      if (error) throw error;
+      await apiClient.updateWorkout(activeWorkout.id, {
+        end_time: new Date().toISOString()
+      });
 
       setActiveWorkout(null);
       setWorkoutSets([]);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, ChevronDown, ChevronUp, Dumbbell } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { apiClient } from '../lib/api';
 import { useAuth } from '../hooks/useAuth';
 
 interface WorkoutSet {
@@ -37,24 +37,13 @@ export function WorkoutHistory() {
 
     try {
       // Fetch completed workouts (those with end_time)
-      const { data: workoutsData, error: workoutsError } = await supabase
-        .from('workouts')
-        .select('*')
-        .eq('user_id', user.id)
-        .not('end_time', 'is', null)
-        .order('start_time', { ascending: false });
-
-      if (workoutsError) throw workoutsError;
+      const workoutsData = await apiClient.getWorkouts();
+      const completedWorkouts = workoutsData.filter(workout => workout.end_time);
 
       // Fetch sets for each workout
       const workoutsWithSets = await Promise.all(
-        (workoutsData || []).map(async (workout) => {
-          const { data: sets } = await supabase
-            .from('workout_sets')
-            .select('*')
-            .eq('workout_id', workout.id)
-            .order('exercise_name')
-            .order('set_number');
+        completedWorkouts.map(async (workout) => {
+          const sets = await apiClient.getWorkoutSets(workout.id);
 
           return {
             ...workout,
