@@ -71,13 +71,13 @@ export const insertWorkoutSchema = createInsertSchema(workouts).pick({
   end_time: z.string().transform((str) => new Date(str)).optional(),
 });
 
-export const insertWorkoutSetSchema = createInsertSchema(workout_sets).pick({
-  workout_id: true,
-  exercise_name: true,
-  weight: true,
-  reps: true,
-  rpe: true,
-  set_number: true,
+export const insertWorkoutSetSchema = z.object({
+  workout_id: z.string(),
+  exercise_name: z.string(),
+  weight: z.union([z.string(), z.number()]).transform(val => Number(val)),
+  reps: z.union([z.string(), z.number()]).transform(val => Number(val)),
+  rpe: z.union([z.string(), z.number()]).transform(val => Number(val)),
+  set_number: z.union([z.string(), z.number()]).transform(val => Number(val)),
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;

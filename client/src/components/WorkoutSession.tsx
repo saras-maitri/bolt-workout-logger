@@ -55,15 +55,25 @@ export function WorkoutSession() {
       const exercise = activeWorkout.exercises[currentExerciseIndex];
       setCurrentExercise(exercise);
       
-      // Initialize set inputs based on planned sets
-      const inputs = Array.from({ length: exercise.planned_sets }, () => ({
-        weight: 0,
-        reps: 0,
-        rpe: 5
-      }));
+      // Load existing sets for this exercise
+      const existingSets = workoutSets.filter(set => set.exercise_name === exercise.name);
+      
+      // Initialize set inputs based on planned sets, preserving existing data
+      const inputs = Array.from({ length: exercise.planned_sets }, (_, index) => {
+        const existingSet = existingSets.find(set => set.set_number === index + 1);
+        return existingSet ? {
+          weight: existingSet.weight,
+          reps: existingSet.reps,
+          rpe: existingSet.rpe
+        } : {
+          weight: 0,
+          reps: 0,
+          rpe: 0
+        };
+      });
       setSetInputs(inputs);
     }
-  }, [activeWorkout, currentExerciseIndex]);
+  }, [activeWorkout, currentExerciseIndex, workoutSets]);
 
   const fetchRoutines = async () => {
     if (!user) return;
@@ -109,7 +119,10 @@ export function WorkoutSession() {
         start_time: workout.start_time,
         exercises: selectedRoutine.exercises
       });
-      setWorkoutSets([]);
+      
+      // Load any existing sets for this workout
+      const existingSets = await apiClient.getWorkoutSets(workout.id);
+      setWorkoutSets(existingSets || []);
       setCurrentExerciseIndex(0);
     } catch (error) {
       console.error('Error starting workout:', error);
@@ -175,8 +188,17 @@ export function WorkoutSession() {
     if (!activeWorkout || !currentExercise) return;
     
     const setData = setInputs[setIndex];
-    if (setData.weight > 0 || setData.reps > 0) {
+    if (setData.weight > 0 && setData.reps > 0 && setData.rpe > 0) {
       try {
+        // Check if set already exists and remove it first
+        const existingSet = workoutSets.find(set => 
+          set.exercise_name === currentExercise.name && set.set_number === setIndex + 1
+        );
+
+        if (existingSet && existingSet.id) {
+          await apiClient.deleteWorkoutSet(existingSet.id);
+        }
+
         const workoutSet = await apiClient.createWorkoutSet({
           workout_id: activeWorkout.id,
           exercise_name: currentExercise.name,
@@ -432,49 +454,19 @@ export function WorkoutSession() {
                           <div className="relative">
                             <input
                               type="number"
-                              value={input.rpe || 5}
-                              onChange={(e) => updateSetInput(index, 'rpe', parseInt(e.target.value) || 5)}
+                              value={input.rpe || ''}
+                              onChange={(e) => updateSetInput(index, 'rpe', parseInt(e.target.value) || 0)}
                               onBlur={() => saveSetOnBlur(index)}
                               className="w-full px-3 py-3 text-center border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg font-semibold bg-white"
                               min="1"
                               max="10"
-                              placeholder="5"
+                              placeholder="RPE"
                             />
                           </div>
                         </div>
                       </div>
                       
-                      {/* Quick action buttons for common values */}
-                      <div className="mt-3 flex gap-2">
-                        <div className="flex-1">
-                          <p className="text-xs text-gray-500 mb-1">Quick weight:</p>
-                          <div className="flex gap-1">
-                            {[135, 185, 225, 275, 315].map((weight) => (
-                              <button
-                                key={weight}
-                                onClick={() => updateSetInput(index, 'weight', weight)}
-                                className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
-                              >
-                                {weight}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-xs text-gray-500 mb-1">Quick reps:</p>
-                          <div className="flex gap-1">
-                            {[5, 8, 10, 12, 15].map((reps) => (
-                              <button
-                                key={reps}
-                                onClick={() => updateSetInput(index, 'reps', reps)}
-                                className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors"
-                              >
-                                {reps}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
+
                     </div>
                   ))}
                 </div>

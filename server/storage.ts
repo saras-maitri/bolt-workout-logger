@@ -110,7 +110,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createWorkoutSet(workoutSet: InsertWorkoutSet): Promise<WorkoutSet> {
-    const result = await db.insert(workout_sets).values(workoutSet).returning();
+    const result = await db.insert(workout_sets).values({
+      workout_id: workoutSet.workout_id,
+      exercise_name: workoutSet.exercise_name,
+      weight: workoutSet.weight.toString(),
+      reps: workoutSet.reps,
+      rpe: workoutSet.rpe,
+      set_number: workoutSet.set_number,
+    }).returning();
     return result[0];
   }
 
