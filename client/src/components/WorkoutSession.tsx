@@ -157,6 +157,47 @@ export function WorkoutSession() {
     ));
   };
 
+  const goToPreviousExercise = async () => {
+    if (currentExerciseIndex > 0) {
+      await saveAllSets();
+      setCurrentExerciseIndex(prev => prev - 1);
+    }
+  };
+
+  const selectExercise = async (exerciseIndex: number) => {
+    if (exerciseIndex !== currentExerciseIndex) {
+      await saveAllSets();
+      setCurrentExerciseIndex(exerciseIndex);
+    }
+  };
+
+  const saveSetOnBlur = async (setIndex: number) => {
+    if (!activeWorkout || !currentExercise) return;
+    
+    const setData = setInputs[setIndex];
+    if (setData.weight > 0 || setData.reps > 0) {
+      try {
+        const workoutSet = await apiClient.createWorkoutSet({
+          workout_id: activeWorkout.id,
+          exercise_name: currentExercise.name,
+          weight: setData.weight,
+          reps: setData.reps,
+          rpe: setData.rpe,
+          set_number: setIndex + 1
+        });
+
+        setWorkoutSets(prev => {
+          const filtered = prev.filter(set => 
+            !(set.exercise_name === currentExercise.name && set.set_number === setIndex + 1)
+          );
+          return [...filtered, workoutSet];
+        });
+      } catch (error) {
+        console.error('Error saving set:', error);
+      }
+    }
+  };
+
   const deleteSet = async (setId: string) => {
     try {
       await apiClient.deleteWorkoutSet(setId);
@@ -283,16 +324,49 @@ export function WorkoutSession() {
       ) : (
         <div className="space-y-6">
           <div className="bg-gradient-to-r from-green-500 to-blue-500 text-white rounded-xl p-6">
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold">{activeWorkout.routine_name}</h2>
               <div className="flex items-center">
                 <Clock className="w-5 h-5 mr-2" />
                 <span className="font-semibold">{formatDuration(activeWorkout.start_time)}</span>
               </div>
             </div>
-            <p className="opacity-90">
-              Exercise {currentExerciseIndex + 1} of {activeWorkout.exercises.length}
-            </p>
+            
+            {/* Exercise Selection Dropdown */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium mb-2 opacity-90">Current Exercise:</label>
+              <select
+                value={currentExerciseIndex}
+                onChange={(e) => selectExercise(Number(e.target.value))}
+                className="w-full bg-white/20 backdrop-blur border border-white/30 rounded-lg px-3 py-2 text-white placeholder-white/70 focus:ring-2 focus:ring-white/50 focus:border-transparent"
+              >
+                {activeWorkout.exercises.map((exercise, index) => (
+                  <option key={exercise.id} value={index} className="text-gray-900">
+                    {index + 1}. {exercise.name} ({exercise.planned_sets} sets)
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Navigation Buttons */}
+            <div className="flex gap-2">
+              <button
+                onClick={goToPreviousExercise}
+                disabled={currentExerciseIndex === 0}
+                className="flex-1 bg-white/20 backdrop-blur border border-white/30 rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white/30 transition-colors flex items-center justify-center"
+              >
+                <ArrowRight className="w-4 h-4 mr-1 rotate-180" />
+                Previous
+              </button>
+              <button
+                onClick={goToNextExercise}
+                disabled={currentExerciseIndex === activeWorkout.exercises.length - 1}
+                className="flex-1 bg-white/20 backdrop-blur border border-white/30 rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white/30 transition-colors flex items-center justify-center"
+              >
+                Next
+                <ArrowRight className="w-4 h-4 ml-1" />
+              </button>
+            </div>
           </div>
 
           {currentExercise && (
@@ -325,6 +399,7 @@ export function WorkoutSession() {
                               type="number"
                               value={input.weight || ''}
                               onChange={(e) => updateSetInput(index, 'weight', parseFloat(e.target.value) || 0)}
+                              onBlur={() => saveSetOnBlur(index)}
                               className="w-full px-2 py-1 text-center border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent text-sm"
                               min="0"
                               step="0.5"
@@ -341,6 +416,7 @@ export function WorkoutSession() {
                               type="number"
                               value={input.reps || ''}
                               onChange={(e) => updateSetInput(index, 'reps', parseInt(e.target.value) || 0)}
+                              onBlur={() => saveSetOnBlur(index)}
                               className="w-full px-2 py-1 text-center border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent text-sm"
                               min="0"
                               placeholder="0"
@@ -356,6 +432,7 @@ export function WorkoutSession() {
                               type="number"
                               value={input.rpe || 5}
                               onChange={(e) => updateSetInput(index, 'rpe', parseInt(e.target.value) || 5)}
+                              onBlur={() => saveSetOnBlur(index)}
                               className="w-full px-2 py-1 text-center border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent text-sm"
                               min="1"
                               max="10"
