@@ -156,9 +156,7 @@ export function WorkoutSession() {
     }
   };
 
-  const goToNextExercise = async () => {
-    await saveAllSets();
-    
+  const goToNextExercise = () => {
     if (currentExerciseIndex < activeWorkout!.exercises.length - 1) {
       setCurrentExerciseIndex(prev => prev + 1);
     }
@@ -170,16 +168,14 @@ export function WorkoutSession() {
     ));
   };
 
-  const goToPreviousExercise = async () => {
+  const goToPreviousExercise = () => {
     if (currentExerciseIndex > 0) {
-      await saveAllSets();
       setCurrentExerciseIndex(prev => prev - 1);
     }
   };
 
-  const selectExercise = async (exerciseIndex: number) => {
+  const selectExercise = (exerciseIndex: number) => {
     if (exerciseIndex !== currentExerciseIndex) {
-      await saveAllSets();
       setCurrentExerciseIndex(exerciseIndex);
     }
   };
@@ -414,7 +410,7 @@ export function WorkoutSession() {
                       <div className="grid grid-cols-3 gap-3">
                         <div className="space-y-2">
                           <label className="block text-sm font-medium text-gray-700">
-                            Weight (lbs)
+                            Weight (kg)
                           </label>
                           <div className="relative">
                             <input
@@ -484,7 +480,7 @@ export function WorkoutSession() {
                             {set.set_number}
                           </span>
                           <div className="text-gray-900">
-                            <span className="font-semibold">{set.weight} lbs</span>
+                            <span className="font-semibold">{set.weight} kg</span>
                             <span className="mx-2 text-gray-400">×</span>
                             <span className="font-semibold">{set.reps} reps</span>
                             <span className="mx-2 text-gray-400">@</span>
