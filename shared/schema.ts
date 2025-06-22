@@ -66,6 +66,9 @@ export const insertWorkoutSchema = createInsertSchema(workouts).pick({
   routine_name: true,
   start_time: true,
   end_time: true,
+}).extend({
+  start_time: z.string().transform((str) => new Date(str)),
+  end_time: z.string().transform((str) => new Date(str)).optional(),
 });
 
 export const insertWorkoutSetSchema = createInsertSchema(workout_sets).pick({

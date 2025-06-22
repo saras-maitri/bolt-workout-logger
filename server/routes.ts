@@ -179,7 +179,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch('/api/workouts/:id', authenticateUser, async (req: AuthenticatedRequest, res) => {
     try {
-      const workout = await storage.updateWorkout(req.params.id, req.user!.id, req.body);
+      // For updates, we don't need strict validation as it's partial data
+      const updates = req.body;
+      if (updates.end_time && typeof updates.end_time === 'string') {
+        updates.end_time = new Date(updates.end_time);
+      }
+      const workout = await storage.updateWorkout(req.params.id, req.user!.id, updates);
       res.json(workout);
     } catch (error) {
       console.error('Update workout error:', error);
