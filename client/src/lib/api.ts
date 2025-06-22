@@ -2,9 +2,16 @@
 class ApiClient {
   private sessionId: string | null = null;
   private baseUrl = '/api';
+  private authStateListeners: ((session: any) => void)[] = [];
 
   constructor() {
     this.sessionId = localStorage.getItem('sessionId');
+  }
+
+  private triggerAuthStateChange(session: any) {
+    this.authStateListeners.forEach(listener => {
+      listener(session);
+    });
   }
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
@@ -39,6 +46,10 @@ class ApiClient {
     
     this.sessionId = result.sessionId;
     localStorage.setItem('sessionId', result.sessionId);
+    
+    // Trigger auth state change
+    this.triggerAuthStateChange({ user: result.user });
+    
     return { data: { user: result.user }, error: null };
   }
 
@@ -51,6 +62,10 @@ class ApiClient {
       
       this.sessionId = result.sessionId;
       localStorage.setItem('sessionId', result.sessionId);
+      
+      // Trigger auth state change
+      this.triggerAuthStateChange({ user: result.user });
+      
       return { data: { user: result.user }, error: null };
     } catch (error) {
       return { data: null, error: { message: (error as Error).message } };
@@ -62,6 +77,10 @@ class ApiClient {
       await this.request('/auth/signout', { method: 'POST' });
       this.sessionId = null;
       localStorage.removeItem('sessionId');
+      
+      // Trigger auth state change
+      this.triggerAuthStateChange(null);
+      
       return { error: null };
     } catch (error) {
       return { error: { message: (error as Error).message } };
@@ -158,7 +177,13 @@ class ApiClient {
 
   // Auth state change simulation
   onAuthStateChange(callback: (event: string, session: any) => void) {
-    // Simulate auth state change listener
+    // Add listener to our internal array
+    const listener = (session: any) => {
+      callback('SIGNED_IN', session);
+    };
+    this.authStateListeners.push(listener);
+
+    // Also handle storage changes for cross-tab sync
     const handleStorageChange = () => {
       const sessionId = localStorage.getItem('sessionId');
       if (sessionId !== this.sessionId) {
@@ -175,6 +200,11 @@ class ApiClient {
       data: {
         subscription: {
           unsubscribe: () => {
+            // Remove from listeners array
+            const index = this.authStateListeners.indexOf(listener);
+            if (index > -1) {
+              this.authStateListeners.splice(index, 1);
+            }
             window.removeEventListener('storage', handleStorageChange);
           }
         }
