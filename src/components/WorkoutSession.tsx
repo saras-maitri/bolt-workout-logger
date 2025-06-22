@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Square, Clock, Plus } from 'lucide-react';
+import { Play, Square, Clock, Edit3, Trash2, Save, X, ArrowRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 
@@ -17,6 +17,7 @@ interface Routine {
 }
 
 interface WorkoutSet {
+  id?: string;
   exercise_name: string;
   weight: number;
   reps: number;
@@ -37,11 +38,10 @@ export function WorkoutSession() {
   const [selectedRoutineId, setSelectedRoutineId] = useState<string>('');
   const [activeWorkout, setActiveWorkout] = useState<ActiveWorkout | null>(null);
   const [workoutSets, setWorkoutSets] = useState<WorkoutSet[]>([]);
-  const [currentSet, setCurrentSet] = useState<Partial<WorkoutSet>>({
-    weight: 0,
-    reps: 0,
-    rpe: 5
-  });
+  const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
+  const [currentExercise, setCurrentExercise] = useState<Exercise | null>(null);
+  const [setInputs, setSetInputs] = useState<{ weight: number; reps: number; rpe: number }[]>([]);
+  const [editingSetId, setEditingSetId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -49,6 +49,21 @@ export function WorkoutSession() {
       fetchRoutines();
     }
   }, [user]);
+
+  useEffect(() => {
+    if (activeWorkout && activeWorkout.exercises.length > 0) {
+      const exercise = activeWorkout.exercises[currentExerciseIndex];
+      setCurrentExercise(exercise);
+      
+      // Initialize set inputs based on planned sets
+      const inputs = Array.from({ length: exercise.planned_sets }, () => ({
+        weight: 0,
+        reps: 0,
+        rpe: 5
+      }));
+      setSetInputs(inputs);
+    }
+  }, [activeWorkout, currentExerciseIndex]);
 
   const fetchRoutines = async () => {
     if (!user) return;
@@ -112,49 +127,102 @@ export function WorkoutSession() {
         exercises: selectedRoutine.exercises
       });
       setWorkoutSets([]);
+      setCurrentExerciseIndex(0);
     } catch (error) {
       console.error('Error starting workout:', error);
     }
   };
 
-  const addSet = async () => {
-    if (!activeWorkout || !currentSet.exercise_name || !user) return;
+  const saveAllSets = async () => {
+    if (!activeWorkout || !currentExercise) return;
 
-    const exerciseSets = workoutSets.filter(s => s.exercise_name === currentSet.exercise_name);
-    const setNumber = exerciseSets.length + 1;
+    const setsToSave = setInputs
+      .map((input, index) => ({
+        workout_id: activeWorkout.id,
+        exercise_name: currentExercise.name,
+        weight: input.weight,
+        reps: input.reps,
+        rpe: input.rpe,
+        set_number: index + 1
+      }))
+      .filter(set => set.weight > 0 || set.reps > 0); // Only save sets with data
 
-    const newSet: WorkoutSet = {
-      exercise_name: currentSet.exercise_name,
-      weight: currentSet.weight || 0,
-      reps: currentSet.reps || 0,
-      rpe: currentSet.rpe || 5,
-      set_number: setNumber
-    };
+    if (setsToSave.length === 0) return;
 
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('workout_sets')
-        .insert({
-          workout_id: activeWorkout.id,
-          ...newSet
-        });
+        .insert(setsToSave)
+        .select();
 
       if (error) throw error;
 
-      setWorkoutSets(prev => [...prev, newSet]);
-      setCurrentSet({
-        exercise_name: currentSet.exercise_name,
-        weight: currentSet.weight || 0,
-        reps: currentSet.reps || 0,
-        rpe: 5
-      });
+      const newSets = data.map(set => ({
+        id: set.id,
+        exercise_name: set.exercise_name,
+        weight: set.weight,
+        reps: set.reps,
+        rpe: set.rpe,
+        set_number: set.set_number
+      }));
+
+      setWorkoutSets(prev => [...prev, ...newSets]);
     } catch (error) {
-      console.error('Error adding set:', error);
+      console.error('Error saving sets:', error);
+    }
+  };
+
+  const goToNextExercise = async () => {
+    await saveAllSets();
+    
+    if (currentExerciseIndex < activeWorkout!.exercises.length - 1) {
+      setCurrentExerciseIndex(prev => prev + 1);
+    }
+  };
+
+  const updateSetInput = (setIndex: number, field: 'weight' | 'reps' | 'rpe', value: number) => {
+    setSetInputs(prev => prev.map((input, index) => 
+      index === setIndex ? { ...input, [field]: value } : input
+    ));
+  };
+
+  const deleteSet = async (setId: string) => {
+    try {
+      const { error } = await supabase
+        .from('workout_sets')
+        .delete()
+        .eq('id', setId);
+
+      if (error) throw error;
+
+      setWorkoutSets(prev => prev.filter(set => set.id !== setId));
+    } catch (error) {
+      console.error('Error deleting set:', error);
+    }
+  };
+
+  const updateSet = async (setId: string, updates: Partial<WorkoutSet>) => {
+    try {
+      const { error } = await supabase
+        .from('workout_sets')
+        .update(updates)
+        .eq('id', setId);
+
+      if (error) throw error;
+
+      setWorkoutSets(prev => prev.map(set => 
+        set.id === setId ? { ...set, ...updates } : set
+      ));
+      setEditingSetId(null);
+    } catch (error) {
+      console.error('Error updating set:', error);
     }
   };
 
   const finishWorkout = async () => {
     if (!activeWorkout) return;
+
+    await saveAllSets();
 
     try {
       const { error } = await supabase
@@ -168,7 +236,9 @@ export function WorkoutSession() {
 
       setActiveWorkout(null);
       setWorkoutSets([]);
-      setCurrentSet({ weight: 0, reps: 0, rpe: 5 });
+      setCurrentExerciseIndex(0);
+      setCurrentExercise(null);
+      setSetInputs([]);
       setSelectedRoutineId('');
     } catch (error) {
       console.error('Error finishing workout:', error);
@@ -180,6 +250,10 @@ export function WorkoutSession() {
     const now = new Date();
     const diff = Math.floor((now.getTime() - start.getTime()) / 1000 / 60);
     return `${diff}m`;
+  };
+
+  const getCurrentExerciseSets = () => {
+    return workoutSets.filter(set => set.exercise_name === currentExercise?.name);
   };
 
   if (loading) {
@@ -262,98 +336,170 @@ export function WorkoutSession() {
                 <span className="font-semibold">{formatDuration(activeWorkout.start_time)}</span>
               </div>
             </div>
-            <p className="opacity-90">Workout in progress</p>
+            <p className="opacity-90">
+              Exercise {currentExerciseIndex + 1} of {activeWorkout.exercises.length}
+            </p>
           </div>
 
-          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Log Set</h3>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Exercise
-                </label>
-                <select
-                  value={currentSet.exercise_name || ''}
-                  onChange={(e) => setCurrentSet(prev => ({ ...prev, exercise_name: e.target.value }))}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">Select exercise...</option>
-                  {activeWorkout.exercises.map((exercise) => (
-                    <option key={exercise.id} value={exercise.name}>
-                      {exercise.name}
-                    </option>
-                  ))}
-                </select>
+          {currentExercise && (
+            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold text-gray-900">{currentExercise.name}</h3>
+                <span className="text-sm text-gray-500">{currentExercise.planned_sets} sets planned</span>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Weight (lbs)
-                  </label>
-                  <input
-                    type="number"
-                    value={currentSet.weight || ''}
-                    onChange={(e) => setCurrentSet(prev => ({ ...prev, weight: parseFloat(e.target.value) || 0 }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center"
-                    min="0"
-                    step="0.5"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Reps
-                  </label>
-                  <input
-                    type="number"
-                    value={currentSet.reps || ''}
-                    onChange={(e) => setCurrentSet(prev => ({ ...prev, reps: parseInt(e.target.value) || 0 }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center"
-                    min="0"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    RPE
-                  </label>
-                  <input
-                    type="number"
-                    value={currentSet.rpe || 5}
-                    onChange={(e) => setCurrentSet(prev => ({ ...prev, rpe: parseInt(e.target.value) || 5 }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center"
-                    min="1"
-                    max="10"
-                  />
+              {/* Set Input Table */}
+              <div className="mb-6">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="text-left py-2 px-2 text-sm font-medium text-gray-700">Set</th>
+                        {setInputs.map((_, index) => (
+                          <th key={index} className="text-center py-2 px-2 text-sm font-medium text-gray-700">
+                            {index + 1}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b border-gray-100">
+                        <td className="py-3 px-2 text-sm font-medium text-gray-700">Weight</td>
+                        {setInputs.map((input, index) => (
+                          <td key={index} className="py-2 px-1">
+                            <input
+                              type="number"
+                              value={input.weight || ''}
+                              onChange={(e) => updateSetInput(index, 'weight', parseFloat(e.target.value) || 0)}
+                              className="w-full px-2 py-1 text-center border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent text-sm"
+                              min="0"
+                              step="0.5"
+                              placeholder="0"
+                            />
+                          </td>
+                        ))}
+                      </tr>
+                      <tr className="border-b border-gray-100">
+                        <td className="py-3 px-2 text-sm font-medium text-gray-700">Reps</td>
+                        {setInputs.map((input, index) => (
+                          <td key={index} className="py-2 px-1">
+                            <input
+                              type="number"
+                              value={input.reps || ''}
+                              onChange={(e) => updateSetInput(index, 'reps', parseInt(e.target.value) || 0)}
+                              className="w-full px-2 py-1 text-center border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent text-sm"
+                              min="0"
+                              placeholder="0"
+                            />
+                          </td>
+                        ))}
+                      </tr>
+                      <tr>
+                        <td className="py-3 px-2 text-sm font-medium text-gray-700">RPE</td>
+                        {setInputs.map((input, index) => (
+                          <td key={index} className="py-2 px-1">
+                            <input
+                              type="number"
+                              value={input.rpe || 5}
+                              onChange={(e) => updateSetInput(index, 'rpe', parseInt(e.target.value) || 5)}
+                              className="w-full px-2 py-1 text-center border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent text-sm"
+                              min="1"
+                              max="10"
+                            />
+                          </td>
+                        ))}
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
 
-              <button
-                onClick={addSet}
-                disabled={!currentSet.exercise_name}
-                className="w-full bg-orange-500 text-white py-3 px-4 rounded-lg font-medium hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center"
-              >
-                <Plus className="w-5 h-5 mr-2" />
-                Add Set
-              </button>
+              {/* Navigation Buttons */}
+              <div className="flex gap-3">
+                {currentExerciseIndex < activeWorkout.exercises.length - 1 ? (
+                  <button
+                    onClick={goToNextExercise}
+                    className="flex-1 bg-blue-500 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-600 transition-all duration-200 flex items-center justify-center"
+                  >
+                    Next Exercise
+                    <ArrowRight className="w-5 h-5 ml-2" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={saveAllSets}
+                    className="flex-1 bg-green-500 text-white py-3 px-4 rounded-lg font-medium hover:bg-green-600 transition-all duration-200 flex items-center justify-center"
+                  >
+                    <Save className="w-5 h-5 mr-2" />
+                    Save Sets
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
-          {workoutSets.length > 0 && (
+          {/* Completed Sets for Current Exercise */}
+          {getCurrentExerciseSets().length > 0 && (
             <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Completed Sets</h3>
               <div className="space-y-3">
-                {workoutSets.map((set, index) => (
-                  <div key={index} className="flex justify-between items-center py-2 px-3 bg-gray-50 rounded-lg">
-                    <div>
-                      <span className="font-medium text-gray-900">{set.exercise_name}</span>
-                      <span className="text-sm text-gray-500 ml-2">Set {set.set_number}</span>
-                    </div>
-                    <div className="text-sm text-gray-600">
-                      {set.weight}lbs × {set.reps} @ RPE {set.rpe}
-                    </div>
+                {getCurrentExerciseSets().map((set) => (
+                  <div key={set.id} className="flex justify-between items-center py-3 px-4 bg-gray-50 rounded-lg">
+                    {editingSetId === set.id ? (
+                      <div className="flex-1 grid grid-cols-4 gap-2 items-center">
+                        <input
+                          type="number"
+                          defaultValue={set.weight}
+                          className="px-2 py-1 text-center border border-gray-300 rounded text-sm"
+                          onBlur={(e) => updateSet(set.id!, { weight: parseFloat(e.target.value) || 0 })}
+                          min="0"
+                          step="0.5"
+                        />
+                        <input
+                          type="number"
+                          defaultValue={set.reps}
+                          className="px-2 py-1 text-center border border-gray-300 rounded text-sm"
+                          onBlur={(e) => updateSet(set.id!, { reps: parseInt(e.target.value) || 0 })}
+                          min="0"
+                        />
+                        <input
+                          type="number"
+                          defaultValue={set.rpe}
+                          className="px-2 py-1 text-center border border-gray-300 rounded text-sm"
+                          onBlur={(e) => updateSet(set.id!, { rpe: parseInt(e.target.value) || 5 })}
+                          min="1"
+                          max="10"
+                        />
+                        <button
+                          onClick={() => setEditingSetId(null)}
+                          className="text-green-600 hover:text-green-800"
+                        >
+                          <Save className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <div>
+                          <span className="font-medium text-gray-900">Set {set.set_number}</span>
+                          <div className="text-sm text-gray-600">
+                            {set.weight}lbs × {set.reps} @ RPE {set.rpe}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setEditingSetId(set.id!)}
+                            className="text-blue-600 hover:text-blue-800 p-1"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => deleteSet(set.id!)}
+                            className="text-red-600 hover:text-red-800 p-1"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 ))}
               </div>
