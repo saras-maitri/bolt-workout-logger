@@ -376,81 +376,155 @@ export function WorkoutSession() {
                 <span className="text-sm text-gray-500">{currentExercise.planned_sets} sets planned</span>
               </div>
 
-              {/* Set Input Table */}
-              <div className="mb-6">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-gray-200">
-                        <th className="text-left py-2 px-2 text-sm font-medium text-gray-700">Set</th>
-                        {setInputs.map((_, index) => (
-                          <th key={index} className="text-center py-2 px-2 text-sm font-medium text-gray-700">
-                            {index + 1}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr className="border-b border-gray-100">
-                        <td className="py-3 px-2 text-sm font-medium text-gray-700">Weight</td>
-                        {setInputs.map((input, index) => (
-                          <td key={index} className="py-2 px-1">
+              {/* Set Input Cards */}
+              <div className="mb-6 space-y-4">
+                <h4 className="text-lg font-semibold text-gray-900 mb-3">Enter Your Sets</h4>
+                <div className="grid gap-4">
+                  {setInputs.map((input, index) => (
+                    <div key={index} className="bg-gray-50 rounded-xl p-4 border-2 border-gray-200 hover:border-blue-300 transition-colors">
+                      <div className="flex items-center justify-between mb-3">
+                        <h5 className="font-semibold text-gray-900">Set {index + 1}</h5>
+                        <span className="text-xs text-gray-500 bg-gray-200 px-2 py-1 rounded-full">
+                          Planned: {currentExercise.planned_sets} sets
+                        </span>
+                      </div>
+                      
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="space-y-2">
+                          <label className="block text-sm font-medium text-gray-700">
+                            Weight (lbs)
+                          </label>
+                          <div className="relative">
                             <input
                               type="number"
                               value={input.weight || ''}
                               onChange={(e) => updateSetInput(index, 'weight', parseFloat(e.target.value) || 0)}
                               onBlur={() => saveSetOnBlur(index)}
-                              className="w-full px-2 py-1 text-center border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent text-sm"
+                              className="w-full px-3 py-3 text-center border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg font-semibold bg-white"
                               min="0"
                               step="0.5"
                               placeholder="0"
                             />
-                          </td>
-                        ))}
-                      </tr>
-                      <tr className="border-b border-gray-100">
-                        <td className="py-3 px-2 text-sm font-medium text-gray-700">Reps</td>
-                        {setInputs.map((input, index) => (
-                          <td key={index} className="py-2 px-1">
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <label className="block text-sm font-medium text-gray-700">
+                            Reps
+                          </label>
+                          <div className="relative">
                             <input
                               type="number"
                               value={input.reps || ''}
                               onChange={(e) => updateSetInput(index, 'reps', parseInt(e.target.value) || 0)}
                               onBlur={() => saveSetOnBlur(index)}
-                              className="w-full px-2 py-1 text-center border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent text-sm"
+                              className="w-full px-3 py-3 text-center border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg font-semibold bg-white"
                               min="0"
                               placeholder="0"
                             />
-                          </td>
-                        ))}
-                      </tr>
-                      <tr>
-                        <td className="py-3 px-2 text-sm font-medium text-gray-700">RPE</td>
-                        {setInputs.map((input, index) => (
-                          <td key={index} className="py-2 px-1">
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <label className="block text-sm font-medium text-gray-700">
+                            RPE (1-10)
+                          </label>
+                          <div className="relative">
                             <input
                               type="number"
                               value={input.rpe || 5}
                               onChange={(e) => updateSetInput(index, 'rpe', parseInt(e.target.value) || 5)}
                               onBlur={() => saveSetOnBlur(index)}
-                              className="w-full px-2 py-1 text-center border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent text-sm"
+                              className="w-full px-3 py-3 text-center border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg font-semibold bg-white"
                               min="1"
                               max="10"
+                              placeholder="5"
                             />
-                          </td>
-                        ))}
-                      </tr>
-                    </tbody>
-                  </table>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Quick action buttons for common values */}
+                      <div className="mt-3 flex gap-2">
+                        <div className="flex-1">
+                          <p className="text-xs text-gray-500 mb-1">Quick weight:</p>
+                          <div className="flex gap-1">
+                            {[135, 185, 225, 275, 315].map((weight) => (
+                              <button
+                                key={weight}
+                                onClick={() => updateSetInput(index, 'weight', weight)}
+                                className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                              >
+                                {weight}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-xs text-gray-500 mb-1">Quick reps:</p>
+                          <div className="flex gap-1">
+                            {[5, 8, 10, 12, 15].map((reps) => (
+                              <button
+                                key={reps}
+                                onClick={() => updateSetInput(index, 'reps', reps)}
+                                className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors"
+                              >
+                                {reps}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
+
+              {/* Completed Sets Display */}
+              {getCurrentExerciseSets().length > 0 && (
+                <div className="mb-6">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-3">Completed Sets</h4>
+                  <div className="space-y-2">
+                    {getCurrentExerciseSets().map((set) => (
+                      <div key={set.id} className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center justify-between">
+                        <div className="flex items-center space-x-4">
+                          <span className="bg-green-500 text-white text-sm font-bold px-2 py-1 rounded-full min-w-[2rem] text-center">
+                            {set.set_number}
+                          </span>
+                          <div className="text-gray-900">
+                            <span className="font-semibold">{set.weight} lbs</span>
+                            <span className="mx-2 text-gray-400">×</span>
+                            <span className="font-semibold">{set.reps} reps</span>
+                            <span className="mx-2 text-gray-400">@</span>
+                            <span className="font-semibold">RPE {set.rpe}</span>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setEditingSetId(set.id!)}
+                            className="text-blue-600 hover:text-blue-800 p-1"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => deleteSet(set.id!)}
+                            className="text-red-600 hover:text-red-800 p-1"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Navigation Buttons */}
               <div className="flex gap-3">
                 {currentExerciseIndex < activeWorkout.exercises.length - 1 ? (
                   <button
                     onClick={goToNextExercise}
-                    className="flex-1 bg-blue-500 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-600 transition-all duration-200 flex items-center justify-center"
+                    className="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white py-4 px-6 rounded-xl font-semibold text-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-200 flex items-center justify-center shadow-lg"
                   >
                     Next Exercise
                     <ArrowRight className="w-5 h-5 ml-2" />
