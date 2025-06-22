@@ -1,10 +1,10 @@
 import React from 'react';
-import { Dumbbell, Plus, Play, LogOut } from 'lucide-react';
+import { Dumbbell, Plus, Play, History, LogOut } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
 interface NavigationProps {
-  currentView: 'routines' | 'workout';
-  onViewChange: (view: 'routines' | 'workout') => void;
+  currentView: 'routines' | 'workout' | 'history';
+  onViewChange: (view: 'routines' | 'workout' | 'history') => void;
 }
 
 export function Navigation({ currentView, onViewChange }: NavigationProps) {
@@ -37,26 +37,38 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
         <div className="flex space-x-1 pb-4">
           <button
             onClick={() => onViewChange('routines')}
-            className={`flex-1 flex items-center justify-center py-3 px-4 rounded-lg font-medium transition-all ${
+            className={`flex-1 flex items-center justify-center py-3 px-3 rounded-lg font-medium transition-all ${
               currentView === 'routines'
                 ? 'bg-blue-500 text-white shadow-md'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
-            <Plus className="w-5 h-5 mr-2" />
-            Routines
+            <Plus className="w-4 h-4 mr-1" />
+            <span className="text-sm">Routines</span>
           </button>
           
           <button
             onClick={() => onViewChange('workout')}
-            className={`flex-1 flex items-center justify-center py-3 px-4 rounded-lg font-medium transition-all ${
+            className={`flex-1 flex items-center justify-center py-3 px-3 rounded-lg font-medium transition-all ${
               currentView === 'workout'
                 ? 'bg-blue-500 text-white shadow-md'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
-            <Play className="w-5 h-5 mr-2" />
-            Workout
+            <Play className="w-4 h-4 mr-1" />
+            <span className="text-sm">Workout</span>
+          </button>
+
+          <button
+            onClick={() => onViewChange('history')}
+            className={`flex-1 flex items-center justify-center py-3 px-3 rounded-lg font-medium transition-all ${
+              currentView === 'history'
+                ? 'bg-blue-500 text-white shadow-md'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            <History className="w-4 h-4 mr-1" />
+            <span className="text-sm">History</span>
           </button>
         </div>
       </div>

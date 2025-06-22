@@ -4,11 +4,12 @@ import { Auth } from './components/Auth';
 import { Navigation } from './components/Navigation';
 import { RoutineManager } from './components/RoutineManager';
 import { WorkoutSession } from './components/WorkoutSession';
+import { WorkoutHistory } from './components/WorkoutHistory';
 import { Loader2 } from 'lucide-react';
 
 function App() {
   const { user, loading } = useAuth();
-  const [currentView, setCurrentView] = useState<'routines' | 'workout'>('routines');
+  const [currentView, setCurrentView] = useState<'routines' | 'workout' | 'history'>('routines');
 
   if (loading) {
     return (
@@ -30,11 +31,9 @@ function App() {
       <Navigation currentView={currentView} onViewChange={setCurrentView} />
       
       <main className="pb-6">
-        {currentView === 'routines' ? (
-          <RoutineManager />
-        ) : (
-          <WorkoutSession />
-        )}
+        {currentView === 'routines' && <RoutineManager />}
+        {currentView === 'workout' && <WorkoutSession />}
+        {currentView === 'history' && <WorkoutHistory />}
       </main>
     </div>
   );
