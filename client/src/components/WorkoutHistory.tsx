@@ -10,7 +10,7 @@ import {
   Save,
   X,
 } from "lucide-react";
-import { apiClient } from "../lib/api";
+import { supabase } from "../lib/supabase";
 import { useAuth } from "../hooks/useAuth";
 
 interface WorkoutSet {
@@ -50,15 +50,25 @@ export function WorkoutHistory() {
 
     try {
       // Fetch completed workouts (those with end_time)
-      const workoutsData = await apiClient.getWorkouts();
-      const completedWorkouts = workoutsData.filter(
-        (workout) => workout.end_time,
-      );
+      const { data: workoutsData, error: workoutsError } = await supabase
+        .from('workouts')
+        .select('*')
+        .eq('user_id', user.id)
+        .not('end_time', 'is', null)
+        .order('start_time', { ascending: false });
+
+      if (workoutsError) throw workoutsError;
 
       // Fetch sets for each workout
       const workoutsWithSets = await Promise.all(
-        completedWorkouts.map(async (workout) => {
-          const sets = await apiClient.getWorkoutSets(workout.id);
+        (workoutsData || []).map(async (workout) => {
+          const { data: sets, error: setsError } = await supabase
+            .from('workout_sets')
+            .select('*')
+            .eq('workout_id', workout.id)
+            .order('set_number', { ascending: true });
+
+          if (setsError) throw setsError;
 
           return {
             ...workout,
@@ -130,6 +140,14 @@ export function WorkoutHistory() {
     }
 
     try {
+      const { error } = await supabase
+        .from('workouts')
+        .delete()
+        .eq('id', workoutId)
+        .eq('user_id', user!.id);
+
+      if (error) throw error;
+
       // Remove from local state
       setWorkouts(prev => prev.filter(w => w.id !== workoutId));
     } catch (error) {
@@ -146,28 +164,24 @@ export function WorkoutHistory() {
     if (!editingSetId) return;
 
     try {
-      // Delete the old set and create a new one with updated values
-      await apiClient.deleteWorkoutSet(editingSetId);
-      
-      const setToUpdate = workouts.flatMap(w => w.sets).find(s => s.id === editingSetId);
-      if (setToUpdate) {
-        const updatedSet = await apiClient.createWorkoutSet({
-          workout_id: setToUpdate.workout_id || '',
-          exercise_name: setToUpdate.exercise_name,
+      const { error } = await supabase
+        .from('workout_sets')
+        .update({
           weight: editValues.weight,
           reps: editValues.reps,
           rpe: editValues.rpe,
-          set_number: setToUpdate.set_number
-        });
+        })
+        .eq('id', editingSetId);
 
-        // Update the local state
-        setWorkouts(prev => prev.map(workout => ({
-          ...workout,
-          sets: workout.sets.map(s => 
-            s.id === editingSetId ? updatedSet : s
-          )
-        })));
-      }
+      if (error) throw error;
+
+      // Update the local state
+      setWorkouts(prev => prev.map(workout => ({
+        ...workout,
+        sets: workout.sets.map(s => 
+          s.id === editingSetId ? { ...s, ...editValues } : s
+        )
+      })));
 
       setEditingSetId(null);
     } catch (error) {
@@ -181,7 +195,12 @@ export function WorkoutHistory() {
     }
 
     try {
-      await apiClient.deleteWorkoutSet(setId);
+      const { error } = await supabase
+        .from('workout_sets')
+        .delete()
+        .eq('id', setId);
+
+      if (error) throw error;
       
       // Update local state
       setWorkouts(prev => prev.map(workout => ({

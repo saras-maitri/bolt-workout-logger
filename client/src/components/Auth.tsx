@@ -4,7 +4,7 @@ import { LogIn, UserPlus, Loader2 } from 'lucide-react';
 
 export function Auth() {
   const [isSignUp, setIsSignUp] = useState(false);
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -17,8 +17,8 @@ export function Auth() {
 
     try {
       const { error } = isSignUp 
-        ? await signUp(username, password)
-        : await signIn(username, password);
+        ? await signUp(email, password)
+        : await signIn(email, password);
 
       if (error) {
         setError(error.message);
@@ -48,17 +48,17 @@ export function Auth() {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
-                Username
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                Email
               </label>
               <input
-                id="username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 required
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                placeholder="Enter your username"
+                placeholder="Enter your email"
               />
             </div>
 

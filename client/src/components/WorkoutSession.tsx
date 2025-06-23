@@ -9,7 +9,7 @@ import {
   X,
   ArrowRight,
 } from "lucide-react";
-import { apiClient } from "../lib/api";
+import { supabase } from "../lib/supabase";
 import { useAuth } from "../hooks/useAuth";
 
 interface Exercise {
@@ -101,11 +101,23 @@ export function WorkoutSession() {
     if (!user) return;
 
     try {
-      const routinesData = await apiClient.getRoutines();
+      const { data: routinesData, error: routinesError } = await supabase
+        .from('routines')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (routinesError) throw routinesError;
 
       const routinesWithExercises = await Promise.all(
         (routinesData || []).map(async (routine) => {
-          const exercises = await apiClient.getRoutineExercises(routine.id);
+          const { data: exercises, error: exercisesError } = await supabase
+            .from('routine_exercises')
+            .select('*')
+            .eq('routine_id', routine.id)
+            .order('order_index', { ascending: true });
+
+          if (exercisesError) throw exercisesError;
 
           return {
             ...routine,
@@ -129,11 +141,18 @@ export function WorkoutSession() {
     if (!selectedRoutine) return;
 
     try {
-      const workout = await apiClient.createWorkout({
-        routine_id: selectedRoutineId,
-        routine_name: selectedRoutine.name,
-        start_time: new Date().toISOString(),
-      });
+      const { data: workout, error: workoutError } = await supabase
+        .from('workouts')
+        .insert({
+          user_id: user.id,
+          routine_id: selectedRoutineId,
+          routine_name: selectedRoutine.name,
+          start_time: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (workoutError) throw workoutError;
 
       setActiveWorkout({
         id: workout.id,
@@ -143,7 +162,13 @@ export function WorkoutSession() {
       });
 
       // Load any existing sets for this workout
-      const existingSets = await apiClient.getWorkoutSets(workout.id);
+      const { data: existingSets, error: setsError } = await supabase
+        .from('workout_sets')
+        .select('*')
+        .eq('workout_id', workout.id);
+
+      if (setsError) throw setsError;
+
       setWorkoutSets(existingSets || []);
       setCurrentExerciseIndex(0);
     } catch (error) {
@@ -168,11 +193,14 @@ export function WorkoutSession() {
     if (setsToSave.length === 0) return;
 
     try {
-      const newSets = await Promise.all(
-        setsToSave.map((set) => apiClient.createWorkoutSet(set)),
-      );
+      const { data: newSets, error } = await supabase
+        .from('workout_sets')
+        .insert(setsToSave)
+        .select();
 
-      setWorkoutSets((prev) => [...prev, ...newSets]);
+      if (error) throw error;
+
+      setWorkoutSets((prev) => [...prev, ...(newSets || [])]);
     } catch (error) {
       console.error("Error saving sets:", error);
     }
@@ -222,17 +250,28 @@ export function WorkoutSession() {
         );
 
         if (existingSet && existingSet.id) {
-          await apiClient.deleteWorkoutSet(existingSet.id);
+          const { error: deleteError } = await supabase
+            .from('workout_sets')
+            .delete()
+            .eq('id', existingSet.id);
+
+          if (deleteError) throw deleteError;
         }
 
-        const workoutSet = await apiClient.createWorkoutSet({
-          workout_id: activeWorkout.id,
-          exercise_name: currentExercise.name,
-          weight: setData.weight,
-          reps: setData.reps,
-          rpe: setData.rpe,
-          set_number: setIndex + 1,
-        });
+        const { data: workoutSet, error: insertError } = await supabase
+          .from('workout_sets')
+          .insert({
+            workout_id: activeWorkout.id,
+            exercise_name: currentExercise.name,
+            weight: setData.weight,
+            reps: setData.reps,
+            rpe: setData.rpe,
+            set_number: setIndex + 1,
+          })
+          .select()
+          .single();
+
+        if (insertError) throw insertError;
 
         setWorkoutSets((prev) => {
           const filtered = prev.filter(
@@ -252,7 +291,13 @@ export function WorkoutSession() {
 
   const deleteSet = async (setId: string) => {
     try {
-      await apiClient.deleteWorkoutSet(setId);
+      const { error } = await supabase
+        .from('workout_sets')
+        .delete()
+        .eq('id', setId);
+
+      if (error) throw error;
+
       setWorkoutSets((prev) => prev.filter((set) => set.id !== setId));
     } catch (error) {
       console.error("Error deleting set:", error);
@@ -261,7 +306,13 @@ export function WorkoutSession() {
 
   const updateSet = async (setId: string, updates: Partial<WorkoutSet>) => {
     try {
-      // Note: API doesn't have update set endpoint, so we'll handle it locally for now
+      const { error } = await supabase
+        .from('workout_sets')
+        .update(updates)
+        .eq('id', setId);
+
+      if (error) throw error;
+
       setWorkoutSets((prev) =>
         prev.map((set) => (set.id === setId ? { ...set, ...updates } : set)),
       );
@@ -277,9 +328,12 @@ export function WorkoutSession() {
     await saveAllSets();
 
     try {
-      await apiClient.updateWorkout(activeWorkout.id, {
-        end_time: new Date().toISOString(),
-      });
+      const { error } = await supabase
+        .from('workouts')
+        .update({ end_time: new Date().toISOString() })
+        .eq('id', activeWorkout.id);
+
+      if (error) throw error;
 
       setActiveWorkout(null);
       setWorkoutSets([]);
@@ -623,94 +677,6 @@ export function WorkoutSession() {
                     Finish Workout
                   </button>
                 )}
-              </div>
-            </div>
-          )}
-
-          {/* Completed Sets for Current Exercise */}
-          {getCurrentExerciseSets().length > 0 && (
-            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Completed Sets
-              </h3>
-              <div className="space-y-3">
-                {getCurrentExerciseSets().map((set) => (
-                  <div
-                    key={set.id}
-                    className="flex justify-between items-center py-3 px-4 bg-gray-50 rounded-lg"
-                  >
-                    {editingSetId === set.id ? (
-                      <div className="flex-1 grid grid-cols-4 gap-2 items-center">
-                        <input
-                          type="number"
-                          defaultValue={set.weight}
-                          className="px-2 py-1 text-center border border-gray-300 rounded text-sm"
-                          onBlur={(e) =>
-                            updateSet(set.id!, {
-                              weight: parseFloat(e.target.value) || 0,
-                            })
-                          }
-                          min="0"
-                          step="0.5"
-                        />
-                        <input
-                          type="number"
-                          defaultValue={set.reps}
-                          className="px-2 py-1 text-center border border-gray-300 rounded text-sm"
-                          onBlur={(e) =>
-                            updateSet(set.id!, {
-                              reps: parseInt(e.target.value) || 0,
-                            })
-                          }
-                          min="0"
-                        />
-                        <input
-                          type="number"
-                          defaultValue={set.rpe}
-                          className="px-2 py-1 text-center border border-gray-300 rounded text-sm"
-                          onBlur={(e) =>
-                            updateSet(set.id!, {
-                              rpe: parseInt(e.target.value) || 5,
-                            })
-                          }
-                          min="1"
-                          max="10"
-                        />
-                        <button
-                          onClick={() => setEditingSetId(null)}
-                          className="text-green-600 hover:text-green-800"
-                        >
-                          <Save className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <div>
-                          <span className="font-medium text-gray-900">
-                            Set {set.set_number}
-                          </span>
-                          <div className="text-sm text-gray-600">
-                            {set.weight}lbs × {set.reps} @ RPE {set.rpe}
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => setEditingSetId(set.id!)}
-                            className="text-blue-600 hover:text-blue-800 p-1"
-                          >
-                            <Edit3 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => deleteSet(set.id!)}
-                            className="text-red-600 hover:text-red-800 p-1"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                ))}
               </div>
             </div>
           )}
